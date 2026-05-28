@@ -1,4 +1,4 @@
-name: rdme
+name: Rdme
 on: # zizmor: ignore[concurrency-limits] - concurrency is the caller's responsibility
   workflow_call:
   workflow_dispatch:
@@ -25,4 +25,4 @@ jobs:
           token: ${{ github.token }}
 
       - name: Check README is up to date
-        run: cargo rdme --check
+        run: cargo rdme --workspace --check
