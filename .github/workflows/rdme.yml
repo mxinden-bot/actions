@@ -1,0 +1,28 @@
+name: Rdme
+on: # zizmor: ignore[concurrency-limits] - concurrency is the caller's responsibility
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rdme:
+    name: README in sync with crate docs
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: mozilla/actions/rust@v1 # zizmor: ignore[unpinned-uses] - self-reference, no supply-chain risk
+        with:
+          tools: cargo-rdme
+          token: ${{ github.token }}
+
+      - name: Check README is up to date
+        run: cargo rdme --workspace --check
