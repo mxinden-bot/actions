@@ -78,8 +78,13 @@ jobs:
       - name: Apply msvc.sh fix
         working-directory: nss-test/nss
         run: |
+          # Without this, git apply resolves paths against the enclosing
+          # actions checkout and silently skips the patch.
+          git init -q .
           git apply -v "$GITHUB_WORKSPACE/.github/nss-vs2026-msvc.patch"
-          sed -n '95,115p' coreconf/msvc.sh
+          grep -n -A 4 "catalog_productLineVersion" coreconf/msvc.sh
+          # Fail loudly if the patch did not land.
+          grep -q "GYP_MSVS_VERSION=2026" coreconf/msvc.sh
 
       - name: "Hypothesis 3: patched msvc.sh builds NSS"
         working-directory: nss-test
