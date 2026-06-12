@@ -199,7 +199,8 @@ runs:
           echo C:/msys64/mingw64/bin
         } >> "$GITHUB_PATH"
         /c/msys64/usr/bin/pacman -S --noconfirm python3-pip nsinstall
-        echo "gyp-next>=0.18.1" > req.txt
+        # 0.21.0 is the first release that knows Visual Studio 2026.
+        echo "gyp-next>=0.21.0" > req.txt
         python3 -m pip install -r req.txt
 
     - name: Set up MSVC (Windows)
@@ -212,10 +213,21 @@ runs:
       shell: bash
       if: ${{ runner.os == 'Windows' && steps.check_build.outputs.build_nss }}
       run: |
+        # Map the installed Visual Studio version (VSCMD_VER, set by
+        # msvc-dev-cmd) to the product-line year gyp expects.
+        case "${VSCMD_VER%%.*}" in
+          18) GYP_MSVS_VERSION=2026 ;;
+          *) GYP_MSVS_VERSION=2022 ;;
+        esac
         {
           echo "GYP_MSVS_OVERRIDE_PATH=$VSINSTALLDIR"
-          echo "GYP_MSVS_VERSION=2022"
+          echo "GYP_MSVS_VERSION=$GYP_MSVS_VERSION"
           echo "BASH=$SHELL"
+          # Setting VSPATH makes NSS's coreconf/msvc.sh skip its own Visual
+          # Studio detection, which would override GYP_MSVS_VERSION with the
+          # vswhere product line version (e.g. "18" for VS 2026) that gyp
+          # doesn't recognize. msvc-dev-cmd has already set up the environment.
+          echo "VSPATH=$VSINSTALLDIR"
         } >> "$GITHUB_ENV"
         # See https://github.com/ilammy/msvc-dev-cmd#name-conflicts-with-shell-bash
         rm /usr/bin/link.exe || true
