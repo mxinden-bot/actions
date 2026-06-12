@@ -1,0 +1,89 @@
+# Temporary test workflow: validate the NSS coreconf/msvc.sh fix for
+# Visual Studio 2026 (.github/nss-vs2026-msvc.patch) on a real
+# windows-2025 runner (VS 2026 image).
+#
+# Hypothesis under test:
+#   1. vswhere's catalog_productLineVersion reports "18" for VS 2026.
+#   2. NSS's unpatched coreconf/msvc.sh exports GYP_MSVS_VERSION=18,
+#      making gyp fail with KeyError: '18'.
+#   3. Mapping 18 -> 2026 in msvc.sh makes the build succeed.
+name: Test NSS msvc.sh on VS 2026
+on: # zizmor: ignore[concurrency-limits] - temporary test workflow
+  push:
+    branches: ["claude/pensive-gates-4ht5eq"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vs2026:
+    name: NSS build on VS 2026
+    timeout-minutes: 45
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: "Hypothesis 1: vswhere reports product line version 18"
+        run: |
+          VSCOMPONENT=Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+          echo "displayName:                $(vswhere -latest -requires "$VSCOMPONENT" -property displayName)"
+          echo "installationVersion:        $(vswhere -latest -requires "$VSCOMPONENT" -property installationVersion)"
+          plv=$(vswhere -latest -requires "$VSCOMPONENT" -property catalog_productLineVersion)
+          echo "catalog_productLineVersion: $plv"
+          if [ "$plv" != "18" ]; then
+            echo "::error::Hypothesis 1 falsified: expected 18, got '$plv'"
+            exit 1
+          fi
+
+      - name: Install build dependencies
+        run: |
+          {
+            echo C:/msys64/usr/bin
+            echo C:/msys64/mingw64/bin
+          } >> "$GITHUB_PATH"
+          /c/msys64/usr/bin/pacman -S --noconfirm python3-pip nsinstall
+          python3 -m pip install "gyp-next>=0.21.0" ninja
+          # link.exe name conflict between GNU coreutils and MSVC, see
+          # https://github.com/ilammy/msvc-dev-cmd#name-conflicts-with-shell-bash
+          rm -f /usr/bin/link.exe /c/msys64/usr/bin/link.exe
+
+      - name: Fetch NSS and NSPR sources
+        run: |
+          mkdir nss-test && cd nss-test
+          curl -LsSf https://github.com/mxinden-bot/nss/archive/refs/heads/master.tar.gz | tar xz
+          mv nss-master nss
+          curl -LsSf https://ftp.mozilla.org/pub/nspr/releases/v4.39/src/nspr-4.39.tar.gz | tar xz --strip-components=1
+          ls nss nspr | head
+
+      - name: "Hypothesis 2: unpatched msvc.sh fails with gyp KeyError '18'"
+        working-directory: nss-test
+        run: |
+          if nss/build.sh -g -Ddisable_tests=1 -Ddisable_dbm=1 -Ddisable_libpkix=1 -Ddisable_ckbi=1 -Ddisable_fips=1 --opt --static > repro.log 2>&1; then
+            echo "::error::Hypothesis 2 falsified: unpatched build succeeded"
+            exit 1
+          fi
+          tail -n 25 repro.log
+          if ! grep -q "KeyError: '18'" repro.log; then
+            echo "::error::Hypothesis 2 falsified: build failed, but not with KeyError '18'"
+            exit 1
+          fi
+          echo "Reproduced: gyp fails with KeyError: '18'"
+
+      - name: Apply msvc.sh fix
+        working-directory: nss-test/nss
+        run: |
+          git apply -v "$GITHUB_WORKSPACE/.github/nss-vs2026-msvc.patch"
+          sed -n '95,115p' coreconf/msvc.sh
+
+      - name: "Hypothesis 3: patched msvc.sh builds NSS"
+        working-directory: nss-test
+        run: |
+          nss/build.sh -g -Ddisable_tests=1 -Ddisable_dbm=1 -Ddisable_libpkix=1 -Ddisable_ckbi=1 -Ddisable_fips=1 --opt --static
+          echo "Build artifacts:"
+          ls dist/Release/lib

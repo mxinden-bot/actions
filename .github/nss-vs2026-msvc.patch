@@ -1,0 +1,20 @@
+diff --git a/coreconf/msvc.sh b/coreconf/msvc.sh
+index a592279..f498b46 100644
+--- a/coreconf/msvc.sh
++++ b/coreconf/msvc.sh
+@@ -99,7 +99,14 @@ if [[ -n "$vsinstall" && -z "$VSPATH" ]]; then
+     export LIB
+ 
+     export GYP_MSVS_OVERRIDE_PATH="${VSPATH}"
+-    export GYP_MSVS_VERSION=$(vswhere -latest -requires "$VSCOMPONENT" -property catalog_productLineVersion)
++    GYP_MSVS_VERSION=$(vswhere -latest -requires "$VSCOMPONENT" -property catalog_productLineVersion)
++    # Starting with Visual Studio 2026, catalog_productLineVersion is the
++    # major version ("18") instead of a year. gyp only understands years,
++    # so translate.
++    case "$GYP_MSVS_VERSION" in
++        18) GYP_MSVS_VERSION=2026 ;;
++    esac
++    export GYP_MSVS_VERSION
+ else
+     echo Assuming env setup is already done.
+     echo VSPATH=$VSPATH
