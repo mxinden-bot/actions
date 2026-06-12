@@ -1,12 +1,12 @@
 # Temporary test workflow: validate the NSS coreconf/msvc.sh fix for
-# Visual Studio 2026 (.github/nss-vs2026-msvc.patch) on a real
-# windows-2025 runner (VS 2026 image).
+# Visual Studio 2026 (mxinden-bot/nss branch claude/fervent-allen-umd8lp)
+# on a real windows-2025 runner (VS 2026 image).
 #
 # Hypothesis under test:
 #   1. vswhere's catalog_productLineVersion reports "18" for VS 2026.
 #   2. NSS's unpatched coreconf/msvc.sh exports GYP_MSVS_VERSION=18,
 #      making gyp fail with KeyError: '18'.
-#   3. Mapping 18 -> 2026 in msvc.sh makes the build succeed.
+#   3. The fixed NSS branch (maps 18 -> 2026 in msvc.sh) builds.
 name: Test NSS msvc.sh on VS 2026
 on: # zizmor: ignore[concurrency-limits] - temporary test workflow
   push:
@@ -75,22 +75,13 @@ jobs:
           fi
           echo "Reproduced: gyp fails with KeyError: '18'"
 
-      - name: Apply msvc.sh fix
-        working-directory: nss-test/nss
-        run: |
-          # Without this, git apply resolves paths against the enclosing
-          # actions checkout and silently skips the patch.
-          git init -q .
-          # tr: the checkout may have converted the patch to CRLF, while the
-          # NSS tarball is LF.
-          tr -d '\r' < "$GITHUB_WORKSPACE/.github/nss-vs2026-msvc.patch" | git apply -v
-          grep -n -A 4 "catalog_productLineVersion" coreconf/msvc.sh
-          # Fail loudly if the patch did not land.
-          grep -q "GYP_MSVS_VERSION=2026" coreconf/msvc.sh
-
-      - name: "Hypothesis 3: patched msvc.sh builds NSS"
+      - name: "Hypothesis 3: fixed NSS branch builds"
         working-directory: nss-test
         run: |
+          rm -rf nss
+          curl -LsSf https://github.com/mxinden-bot/nss/archive/refs/heads/claude/fervent-allen-umd8lp.tar.gz | tar xz
+          mv nss-claude-fervent-allen-umd8lp nss
+          grep -n -A 4 "catalog_productLineVersion" nss/coreconf/msvc.sh
           nss/build.sh -g -Ddisable_tests=1 -Ddisable_dbm=1 -Ddisable_libpkix=1 -Ddisable_ckbi=1 -Ddisable_fips=1 --opt --static
           echo "Build artifacts:"
           ls dist/Release/lib
