@@ -81,7 +81,9 @@ jobs:
           # Without this, git apply resolves paths against the enclosing
           # actions checkout and silently skips the patch.
           git init -q .
-          git apply -v "$GITHUB_WORKSPACE/.github/nss-vs2026-msvc.patch"
+          # tr: the checkout may have converted the patch to CRLF, while the
+          # NSS tarball is LF.
+          tr -d '\r' < "$GITHUB_WORKSPACE/.github/nss-vs2026-msvc.patch" | git apply -v
           grep -n -A 4 "catalog_productLineVersion" coreconf/msvc.sh
           # Fail loudly if the patch did not land.
           grep -q "GYP_MSVS_VERSION=2026" coreconf/msvc.sh
