@@ -20,7 +20,7 @@ jobs:
   vs2026:
     name: NSS build on VS 2026
     timeout-minutes: 45
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     defaults:
       run:
         shell: bash
